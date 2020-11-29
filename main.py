@@ -1,26 +1,20 @@
-import getopt
+import argparse
 import os
 import csv
-import sys
 
 from matplotlib.gridspec import GridSpec
 from sklearn.metrics import plot_confusion_matrix
 
-from configs import *
-from data_loader import CSVLoader
+from classifiers import MultinomialNB
+from data_loader import TSVLoader
 import matplotlib.pyplot as plt
 import numpy as np
-from numpy import genfromtxt
-
-from tuning import tune_models
-
-out_dir = "_out/"
 
 
-def load_dataset(filename):
-    class_loader = CSVLoader()
-    entries = class_loader.load(filename)
-    entries.sort(key=lambda x: int(x["index"]))
+def load_tsv(filename, fields=None):
+    loader = TSVLoader()
+    entries = loader.load(filename, fields)
+
     return entries
 
 
@@ -42,231 +36,196 @@ def create_dir(path):
         os.makedirs(path)
 
 
-def train_and_train_model(model, dataset_name, classes, training_data, test_data):
-    classifiers = CLASSIFIERS_DEFAULT
+def extract_features(text_str: str):
+    f = dict()
+    words = text_str.split(" ")
+    for w in words:
+        w = w.lower()
+        if w in f:
+            f[w] += f[w]
+        else:
+            f[w] = 1
 
-    if dataset_name.lower() in ("ds1", "dataset1"):
-        classifiers = CLASSIFIERS_1
-    elif dataset_name.lower() in ("ds2", "dataset2"):
-        classifiers = CLASSIFIERS_2
-
-    if model.lower() == "all":
-        models = classifiers.keys()
-    elif model == "Best-DT":
-        models = ["Base-DT", "Best-DT"]
-    else:
-        models = [model]
-
-    print("====== Classifiers ======")
-
-    nb_classes = len(classes)
-    class_names = [x["symbol"] for x in classes]
-
-    # Data layout
-    # x : [n_samples, n_features]
-    # y : [n_samples]
-    train_features = training_data[:, 0:-1]
-    train_indexes = training_data[:, -1]
-
-    features = test_data[:, :]
-    expected = test_data[:, -1]
-
-    for model_name in models:
-        print()
-        print(f"Processing for model '{model_name}'.")
-        model = classifiers[model_name]
-
-        # Train
-        print("Training the model...", end=" ")
-        model.fit(train_features, train_indexes)
-        print("Done.")
-
-        predictions = model.predict(features)
-
-        # Write predictions result to file
-        with open(out_dir + model_name + "-" + dataset_name + ".csv", 'w', newline='') as resultsFile:
-            writer = csv.writer(resultsFile, delimiter=',')
-            res_rows = zip(range(len(expected)), predictions)
-            writer.writerows(res_rows)
-
-        continue
-
-        accuracy = (predictions == expected).sum() / len(expected)
-
-        table_cells = []
-        macro_avg_f1 = 0
-        weighted_avg_f1 = 0
-
-        # Per-class measurements
-        for class_i in range(nb_classes):
-            # TP (True Positives)
-            # FN (False Negatives)
-            # FP (False Positives)
-            class_expected = (expected == class_i)
-            TP = np.logical_and((predictions == class_i), class_expected).sum()
-            FN = np.logical_and((predictions != class_i), class_expected).sum()
-            FP = np.logical_and((predictions == class_i), np.invert(class_expected)).sum()
-
-            precision = ((TP / (TP + FP)) if (TP + FP) > 0 else 1)
-            recall = ((TP / (TP + FN)) if (TP + FN) > 0 else 1)
-            f1 = ((2 * precision * recall) / (precision + recall)) if (precision + recall) > 0 else 1
-
-            # Fill table row
-            row = []
-            row.append(f"{TP}/{(TP + FP)} - {round(precision * 100, 3)} %")
-            row.append(f"{TP}/{(TP + FN)} - {round(recall * 100, 3)} %")
-            row.append(f"{round(f1 * 100, 3)} %")
-            table_cells.append(row)
-
-            macro_avg_f1 += f1
-            weighted_avg_f1 += f1 * class_expected.sum()
-
-        macro_avg_f1 = macro_avg_f1 / nb_classes
-        weighted_avg_f1 = weighted_avg_f1 / len(expected)
-
-        # Bar graph + Measurements tables
-        print("Plotting measurements...", end=" ")
-        fig = plt.figure()
-
-        # Layout
-        gs = GridSpec(2, 4, figure=fig)
-        ax1 = fig.add_subplot(gs[0, :])
-        ax2 = fig.add_subplot(gs[1, :-2])
-
-        bottom_right_grid = gs[1, -2:].subgridspec(5, 1)
-
-        ax3 = fig.add_subplot(bottom_right_grid[0, :])
-        ax4 = fig.add_subplot(bottom_right_grid[1:, :])
-
-        fig.set_figwidth(20)
-        fig.set_figheight(15)
-
-        # Histogram not descriptive enough
-        plot_histogram(class_names, expected, ax1,
-                       color=(74 / 255, 159 / 255, 168 / 255), label='Target count', y_tick_count=-1, width=0.9)
-        plot_histogram(class_names, predictions, ax1,
-                       color=(230 / 255, 208 / 255, 46 / 255), label='Predicted', y_tick_count=-1, width=0.4)
-
-        ax1.grid(axis="y", linestyle='dotted')
-        ax1.legend()
-        ax1.set_title(f'{dataset_name} - {model_name} - Measurement results')
-        ax1.set_ylabel("Instance count")
-
-        ax2.set_axis_off()
-        ax3.set_axis_off()
-
-        ax2.table(cellText=table_cells,
-                  rowLabels=class_names,
-                  colLabels=["Precision", "Recall", "f1"], loc='center')
-
-        ax3.table(cellText=[[
-            f"{round(accuracy * 100, 3)} %",
-            f"{round(macro_avg_f1 * 100, 3)} %",
-            f"{round(weighted_avg_f1 * 100, 3)} %"]],
-            colLabels=["Accuracy", "Macro-Average f1", "Weighted-Average f1"], loc='center')
-
-        plot_confusion_matrix(model, features, expected,
-                              display_labels=class_names,
-                              cmap=plt.cm.Blues, ax=ax4)
-
-        fig.show()
-        fig.savefig(out_dir + model_name + '-' + dataset_name + '-measurements.png')
-        print("Done.")
+    return f
 
 
-def parse_args(argv):
-    state = {"mode": "normal", "model": "all"}
-    try:
-        opts, args = getopt.getopt(argv, "hm:", ["model="])
-    except getopt.GetoptError:
-        print('-m <model_name | default:all>')
-        sys.exit(2)
+def extract_features_of_set(data):
+    word_counts = dict()
+    for l in data:
+        for word in l["text"].split(" "):
+            w = word.lower()
+            if w in word_counts:
+                word_counts[w] += word_counts[w]
+            else:
+                word_counts[w] = 1
+    return word_counts
 
-    for arg in args:
-        if arg == 'tune':
-            state["mode"] = "tune"
+def train_and_test_model(model_name, vocabulary, training_data, test_data):
+    # From current data layout
+    train_features = [el["features"] for el in training_data]
+    train_class = [el["cat"] for el in training_data]
 
-    for opt, arg in opts:
-        if opt == '-h' or opt == '--help':
-            print('-m <model_name | default:all>')
-            sys.exit()
-        elif opt in ("-m", "--model"):
-            state["model"] = arg
+    features = [el["features"] for el in test_data]
+    expected = [el["cat"] for el in test_data]
 
-    return state
+    print()
+    print(f"Processing for model '{model_name}'.")
+    model = MultinomialNB(model_name, vocabulary)
+
+    # Register tracing callbacks
+    # TODO
+    # model.register_on_()
+
+
+    # Train
+    print("Training the model...", end=" ")
+    model.fit([el["features"] for el in training_data], train_class)
+    print("Done.")
+
+    predictions = model.predict(features)
+
+    # Write predictions result to file
+    # with open(out_dir + model_name + ".csv", 'w', newline='') as resultsFile:
+    #     writer = csv.writer(resultsFile, delimiter=',')
+    #     res_rows = zip(range(len(expected)), predictions)
+    #     writer.writerows(res_rows)
+    #
+    # accuracy = (predictions == expected).sum() / len(expected)
+    #
+    # table_cells = []
+    # macro_avg_f1 = 0
+    # weighted_avg_f1 = 0
+    #
+    # # Per-class measurements
+    # for class_i in range(nb_classes):
+    #     # TP (True Positives)
+    #     # FN (False Negatives)
+    #     # FP (False Positives)
+    #     class_expected = (expected == class_i)
+    #     TP = np.logical_and((predictions == class_i), class_expected).sum()
+    #     FN = np.logical_and((predictions != class_i), class_expected).sum()
+    #     FP = np.logical_and((predictions == class_i), np.invert(class_expected)).sum()
+    #
+    #     precision = ((TP / (TP + FP)) if (TP + FP) > 0 else 1)
+    #     recall = ((TP / (TP + FN)) if (TP + FN) > 0 else 1)
+    #     f1 = ((2 * precision * recall) / (precision + recall)) if (precision + recall) > 0 else 1
+    #
+    #     # Fill table row
+    #     row = []
+    #     row.append(f"{TP}/{(TP + FP)} - {round(precision * 100, 3)} %")
+    #     row.append(f"{TP}/{(TP + FN)} - {round(recall * 100, 3)} %")
+    #     row.append(f"{round(f1 * 100, 3)} %")
+    #     table_cells.append(row)
+    #
+    #     macro_avg_f1 += f1
+    #     weighted_avg_f1 += f1 * class_expected.sum()
+    #
+    # macro_avg_f1 = macro_avg_f1 / nb_classes
+    # weighted_avg_f1 = weighted_avg_f1 / len(expected)
+    #
+    # # Bar graph + Measurements tables
+    # print("Plotting measurements...", end=" ")
+    # fig = plt.figure()
+    #
+    # # Layout
+    # gs = GridSpec(2, 4, figure=fig)
+    # ax1 = fig.add_subplot(gs[0, :])
+    # ax2 = fig.add_subplot(gs[1, :-2])
+    #
+    # bottom_right_grid = gs[1, -2:].subgridspec(5, 1)
+    #
+    # ax3 = fig.add_subplot(bottom_right_grid[0, :])
+    # ax4 = fig.add_subplot(bottom_right_grid[1:, :])
+    #
+    # fig.set_figwidth(20)
+    # fig.set_figheight(15)
+    #
+    # plot_histogram(classes, expected, ax1,
+    #                color=(74 / 255, 159 / 255, 168 / 255), label='Target count', y_tick_count=-1, width=0.9)
+    # plot_histogram(classes, predictions, ax1,
+    #                color=(230 / 255, 208 / 255, 46 / 255), label='Predicted', y_tick_count=-1, width=0.4)
+    #
+    # ax1.grid(axis="y", linestyle='dotted')
+    # ax1.legend()
+    # ax1.set_title(f'{model_name} - Measurement results')
+    # ax1.set_ylabel("Instance count")
+    #
+    # ax2.set_axis_off()
+    # ax3.set_axis_off()
+    #
+    # ax2.table(cellText=table_cells,
+    #           rowLabels=classes,
+    #           colLabels=["Precision", "Recall", "f1"], loc='center')
+    #
+    # ax3.table(cellText=[[
+    #     f"{round(accuracy * 100, 3)} %",
+    #     f"{round(macro_avg_f1 * 100, 3)} %",
+    #     f"{round(weighted_avg_f1 * 100, 3)} %"]],
+    #     colLabels=["Accuracy", "Macro-Average f1", "Weighted-Average f1"], loc='center')
+    #
+    # plot_confusion_matrix(model, features, expected,
+    #                       display_labels=classes,
+    #                       cmap=plt.cm.Blues, ax=ax4)
+    #
+    # fig.show()
+    # fig.savefig(out_dir + model_name + '-' + dataset_name + '-measurements.png')
+    # print("Done.")
 
 
 def main(argv):
-    state = parse_args(argv)
+    train_in_file, test_in_file, out_dir = args.training, args.test, args.output
+
     create_dir(out_dir)
 
-    print("COMP 472 - Assignment 1")
-    print("Isaac Doré - 40043159")
-    print("==========")
-    print()
+    if not os.path.exists(train_in_file):
+        print(f"Training set input file does not exist. ({train_in_file})")
+        exit(1)
+    if not os.path.exists(test_in_file):
+        print(f"Test set input file does not exist. ({test_in_file})")
+        exit(1)
 
-    dt_name = input("Please enter the name of your dataset (Ex: DS1 | DS2): ")
-    dt_info_filename = input("Please enter the filename of the dataset's information: ")
-    dt_train_filename = input("Please enter the filename of the dataset's training data: ")
-    dt_test_filename = input("Please enter the filename of the dataset's test data with label: ")
-    dt_validation_filename = input("Please enter the filename of the dataset's validation data: ")
+    train_data = load_tsv(train_in_file)
+    test_data = load_tsv(test_in_file, train_data[0].keys())
 
-    try:
-        # Load Dataset1
-        print("Loading dataset information...", end=" ")
-        classes = load_dataset("datasets/" + dt_info_filename)
-        print("Done.")
+    # Generate 2 Vocabulary (Used as features)
+    voc = extract_features_of_set(train_data)  # All words
+    filtered_voc = dict(filter(lambda el: el[1] > 1, voc.items()))  # More than 1 instance
 
-        print("Loading training data...", end=" ")
-        training_data = genfromtxt("datasets/" + dt_train_filename, delimiter=',', dtype=int)
-        print("Done.")
-
-        print("Loading test data...", end=" ")
-        test_data = genfromtxt("datasets/" + dt_test_filename, delimiter=',', dtype=int)
-        print("Done.")
-
-        print("Loading validation data...", end=" ")
-        val_data = genfromtxt("datasets/" + dt_validation_filename, delimiter=',', dtype=int)
-        print("Done.")
-    except Exception as e:
-        sys.tracebacklimit = None
-        print()
-        print(f"ERROR: Failed to load one of the given input file. Please verify and restart.")
-        print(e)
-        exit(0)
-
-    if state["mode"] == "tune":
-        # model = (state["model"] if state["model"] else "DT")
-        while True:
-            m = input("Choose which model to tune for <DT,MLP>:")
-            if m.lower() in ("dt", "mlp"):
-                break
-            print("Invalid choice...")
-
-        tune_models(training_data, val_data, m)
-        return
-
-    print("Plotting instances count...", end=" ")
-    figure, axe = plt.subplots(1)
-
-    figure.suptitle(f'Instances count - {dt_name}')
-    figure.set_figheight(10)
-    figure.set_figwidth(14)
-
-    # Display distribution
-    plot_histogram([x["symbol"] for x in classes], training_data[:, -1], axe)
+    # print("Plotting instances count...", end=" ")
+    # figure, axe = plt.subplots(1)
+    #
+    # figure.suptitle(f'Instances count - NB_BOW')
+    # figure.set_figheight(10)
+    # figure.set_figwidth(14)
+    #
+    # # Display distribution
+    # plot_histogram(voc.keys(), get_voc_of_set(train_data), axe)
 
     # Add titles / labels
-    axe.set_title(dt_name)
-    axe.set_ylabel('Count')
+    # axe.set_title("NB-BOW")
+    # axe.set_ylabel('Count')
+    #
+    # figure.show()
+    # figure.savefig(out_dir + 'instances_count_' + dt_name + '.png')
+    # print("Done.")
+    # print()
 
-    figure.show()
-    figure.savefig(out_dir + 'instances_count_'+dt_name+'.png')
-    print("Done.")
-    print()
+    # Extract features + data formatting
+    train_data = [{
+        "tweet_id": el["tweet_id"],
+        "features": extract_features(el["text"]),
+        "cat": 1 if el["q1_label"].lower() == "yes" else 0,
+    } for el in train_data]
 
-    # Process each datasets
-    train_and_train_model(state["model"], dt_name, classes, training_data, test_data)
+    test_data = [{
+        "tweet_id": el["tweet_id"],
+        "features": extract_features(el["text"]),
+        "cat": 1 if el["q1_label"].lower() == "yes" else 0,
+    } for el in test_data]
+
+    # Process both models
+    train_and_test_model("NB-BOW-OV", list(voc.keys()), train_data, test_data)
+    train_and_test_model("NB-BOW-FV", list(filtered_voc.keys()), train_data, test_data)
 
     print()
     print("All done!")
@@ -274,4 +233,27 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    print("<<<<<<<<<<<<>>>>>>>>>>>>")
+    print("COMP 472 - Assignment 3")
+    print("Isaac Doré - 40043159")
+    print("<<<<<<<<<<<<>>>>>>>>>>>>")
+    print()
+
+    arg_parser = argparse.ArgumentParser(
+        description='Bag-Of-Word Naive Bayes Classifier. Made for COMP 472 Assignment 3.')
+
+    arg_parser.add_argument("-tr", "--training", metavar="<training_set>", type=str,
+                            help="Training dataset input file (Only supports .tsv). Default: _in/covid_training.tsv",
+                            default="_in/covid_training.tsv")
+
+    arg_parser.add_argument("-te", "--test", metavar="<test_set>", type=str,
+                            help="Test dataset input file (Only supports .tsv). Default: _in/covid_test_public.tsv",
+                            default="_in/covid_test_public.tsv")
+
+    arg_parser.add_argument("-o", "--output", metavar="<output>", type=str,
+                            help="Output directory relative to current working directory. Default: _out/",
+                            default="_out/")
+
+    args = arg_parser.parse_args()
+
+    main(args)
