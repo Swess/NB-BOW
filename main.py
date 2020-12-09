@@ -1,11 +1,11 @@
 import argparse
-import os
 import csv
+import os
 
 from matplotlib.gridspec import GridSpec
 from sklearn.metrics import plot_confusion_matrix
 
-from classifiers import MultinomialNB
+from classifiers import MultinomialNB_BOW
 from data_loader import TSVLoader
 import matplotlib.pyplot as plt
 import numpy as np
@@ -60,6 +60,7 @@ def extract_features_of_set(data):
                 word_counts[w] = 1
     return word_counts
 
+
 def train_and_test_model(model_name, vocabulary, training_data, test_data):
     # From current data layout
     train_features = [el["features"] for el in training_data]
@@ -70,26 +71,22 @@ def train_and_test_model(model_name, vocabulary, training_data, test_data):
 
     print()
     print(f"Processing for model '{model_name}'.")
-    model = MultinomialNB(model_name, vocabulary)
-
-    # Register tracing callbacks
-    # TODO
-    # model.register_on_()
-
+    model = MultinomialNB_BOW(model_name, vocabulary)
 
     # Train
     print("Training the model...", end=" ")
-    model.fit([el["features"] for el in training_data], train_class)
+    model.fit(train_features, train_class)
     print("Done.")
 
-    predictions = model.predict(features)
+    # Prediction + Probabilities
+    return model.predict(features)
 
     # Write predictions result to file
-    # with open(out_dir + model_name + ".csv", 'w', newline='') as resultsFile:
+    # with open(f"{out_dir}" + model_name + ".txt", 'w', newline='') as resultsFile:
     #     writer = csv.writer(resultsFile, delimiter=',')
     #     res_rows = zip(range(len(expected)), predictions)
     #     writer.writerows(res_rows)
-    #
+
     # accuracy = (predictions == expected).sum() / len(expected)
     #
     # table_cells = []
@@ -172,6 +169,38 @@ def train_and_test_model(model_name, vocabulary, training_data, test_data):
     # print("Done.")
 
 
+def make_trace(data, filename):
+    lines = list(
+        map(lambda el: f"{el[0]}  {el[1]}  {el[2]}  {el[3]}  {'correct' if el[1] == el[3] else 'wrong'}\n", data))
+    with open(filename, 'w') as file:
+        file.writelines(lines)
+
+
+def make_eval(data, filename):
+    TP = sum([1 if el[1] == el[3] else 0 for el in data])
+    acc = TP / len(data)
+
+    def _calc(data, t_class):
+        other_class = "yes" if t_class == "no" else "no"
+        FP = sum([1 if el[1] == t_class and el[3] == other_class else 0 for el in data])
+        FN = sum([1 if el[1] == other_class and el[3] == t_class else 0 for el in data])
+
+        P = TP / (TP + FP)
+        R = TP / (TP + FN)
+        F1 = (P * R) / (P + R)
+
+        return P, R, F1
+
+    yes_P, yes_R, yes_F1 = _calc(data, "yes")
+    no_P, no_R, no_F1 = _calc(data, "no")
+
+    with open(filename, 'w') as file:
+        file.write(f"{acc}\n")
+        file.write(f"{yes_P}  {no_P}\n")
+        file.write(f"{yes_R}  {no_R}\n")
+        file.write(f"{yes_F1}  {no_F1}\n")
+
+
 def main(argv):
     train_in_file, test_in_file, out_dir = args.training, args.test, args.output
 
@@ -184,11 +213,11 @@ def main(argv):
         print(f"Test set input file does not exist. ({test_in_file})")
         exit(1)
 
-    train_data = load_tsv(train_in_file)
-    test_data = load_tsv(test_in_file, train_data[0].keys())
+    orig_train_data = load_tsv(train_in_file)
+    orig_test_data = load_tsv(test_in_file, orig_train_data[0].keys())
 
     # Generate 2 Vocabulary (Used as features)
-    voc = extract_features_of_set(train_data)  # All words
+    voc = extract_features_of_set(orig_train_data)  # All words
     filtered_voc = dict(filter(lambda el: el[1] > 1, voc.items()))  # More than 1 instance
 
     # print("Plotting instances count...", end=" ")
@@ -215,17 +244,34 @@ def main(argv):
         "tweet_id": el["tweet_id"],
         "features": extract_features(el["text"]),
         "cat": 1 if el["q1_label"].lower() == "yes" else 0,
-    } for el in train_data]
+    } for el in orig_train_data]
 
     test_data = [{
         "tweet_id": el["tweet_id"],
         "features": extract_features(el["text"]),
         "cat": 1 if el["q1_label"].lower() == "yes" else 0,
-    } for el in test_data]
+    } for el in orig_test_data]
 
     # Process both models
-    train_and_test_model("NB-BOW-OV", list(voc.keys()), train_data, test_data)
-    train_and_test_model("NB-BOW-FV", list(filtered_voc.keys()), train_data, test_data)
+    predictions_ov, probs_ov = train_and_test_model("NB-BOW-OV", list(voc.keys()), train_data, test_data)
+    predictions_fv, probs_fv = train_and_test_model("NB-BOW-FV", list(filtered_voc.keys()), train_data, test_data)
+
+    def _pack(preditions, probs):
+        return list(zip(
+            [el["tweet_id"] for el in orig_test_data],
+            ["yes" if el == 1 else "no" for el in preditions],
+            probs,
+            [el["q1_label"].lower() for el in orig_test_data]
+        ))
+
+    data_ov = _pack(predictions_ov, probs_ov)
+    data_fv = _pack(predictions_fv, probs_fv)
+
+    make_trace(data_ov, out_dir + "trace_NB-BOW-OV.txt")
+    make_trace(data_fv, out_dir + "trace_NB-BOW-FV.txt")
+
+    make_eval(data_ov, out_dir + "eval_NB-BOW-OV.txt")
+    make_eval(data_fv, out_dir + "eval_NB-BOW-FV.txt")
 
     print()
     print("All done!")
