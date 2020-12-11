@@ -3,31 +3,29 @@
 # COMP 472 - Assignment 3
 **Author:** Isaac Doré - 40043159
 
-# Running
-The program will prompt you for all required filenames containing the datasets and information.
-The filename are relative to the `./datasets/` folder.
-
-*Note: This program loads datasets from comma-separated CSV files only.*
-
-The results computed are displayed in generated images for each model, stored in the `_out/` directory.
-
-The program contains already optimized models for the 2 given datasets.
-And these models are selected based on the provided dataset name. Namely `DS1` or `DS2`.
+# Dependencies
+To run the code, the requirements first needs to be installed.
+If you are using a Virtual Environment (venv), activate it first.
+Regardless if you are using a python Virtual Environment or not, you can install the project dependencies like so:
+```
+pip install -r requirements.txt
+```
 
 # Options
-The program also expose some arguments & options if need be.
+```
+usage: main.py [-h] [-tr <training_set>] [-te <test_set>] [-o <output>]
 
-You can filter which model to run against the dataset with `-m <model_name>`. By default, they are all run.
-Available models:
-- "GNB"
-- "Base-DT"
-- "Best-DT"
-- "PER"
-- "Base-MLP"
-- "Best-MLP"
+Bag-Of-Word Naive Bayes Classifier. Made for COMP 472 Assignment 3.
 
-The argument `tune` will run the program in tuning mode for the given dataset and will let you choose which model to optimize between DecisionTree or MultiLayerPerceptron.
-
-*Note: This is VERY time consuming as the program currently runs multiple times for multiple scoring, and are all displayed.*
-> ('accuracy', 'precision_macro','precision_weighted', 'recall_macro', 'recall_weighted', 'f1_weighted', 'f1_macro')
-
+optional arguments:
+  -h, --help            show this help message and exit
+  -tr <training_set>, --training <training_set>
+                        Training dataset input file (Only supports .tsv).
+                        Default: _in/covid_training.tsv
+  -te <test_set>, --test <test_set>
+                        Test dataset input file (Only supports .tsv). Default:
+                        _in/covid_test_public.tsv
+  -o <output>, --output <output>
+                        Output directory relative to current working
+                        directory. Default: _out/
+```

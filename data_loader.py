@@ -1,10 +1,6 @@
 from abc import abstractmethod
 import csv
 
-from sklearn.naive_bayes import MultinomialNB
-
-MultinomialNB
-
 class ILoader:
     @abstractmethod
     def load(self, filename: str):
