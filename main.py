@@ -1,13 +1,8 @@
 import argparse
-import csv
 import os
-
-from matplotlib.gridspec import GridSpec
-from sklearn.metrics import plot_confusion_matrix
 
 from classifiers import MultinomialNB_BOW
 from data_loader import TSVLoader
-import matplotlib.pyplot as plt
 import numpy as np
 
 
@@ -81,93 +76,6 @@ def train_and_test_model(model_name, vocabulary, training_data, test_data):
     # Prediction + Probabilities
     return model.predict(features)
 
-    # Write predictions result to file
-    # with open(f"{out_dir}" + model_name + ".txt", 'w', newline='') as resultsFile:
-    #     writer = csv.writer(resultsFile, delimiter=',')
-    #     res_rows = zip(range(len(expected)), predictions)
-    #     writer.writerows(res_rows)
-
-    # accuracy = (predictions == expected).sum() / len(expected)
-    #
-    # table_cells = []
-    # macro_avg_f1 = 0
-    # weighted_avg_f1 = 0
-    #
-    # # Per-class measurements
-    # for class_i in range(nb_classes):
-    #     # TP (True Positives)
-    #     # FN (False Negatives)
-    #     # FP (False Positives)
-    #     class_expected = (expected == class_i)
-    #     TP = np.logical_and((predictions == class_i), class_expected).sum()
-    #     FN = np.logical_and((predictions != class_i), class_expected).sum()
-    #     FP = np.logical_and((predictions == class_i), np.invert(class_expected)).sum()
-    #
-    #     precision = ((TP / (TP + FP)) if (TP + FP) > 0 else 1)
-    #     recall = ((TP / (TP + FN)) if (TP + FN) > 0 else 1)
-    #     f1 = ((2 * precision * recall) / (precision + recall)) if (precision + recall) > 0 else 1
-    #
-    #     # Fill table row
-    #     row = []
-    #     row.append(f"{TP}/{(TP + FP)} - {round(precision * 100, 3)} %")
-    #     row.append(f"{TP}/{(TP + FN)} - {round(recall * 100, 3)} %")
-    #     row.append(f"{round(f1 * 100, 3)} %")
-    #     table_cells.append(row)
-    #
-    #     macro_avg_f1 += f1
-    #     weighted_avg_f1 += f1 * class_expected.sum()
-    #
-    # macro_avg_f1 = macro_avg_f1 / nb_classes
-    # weighted_avg_f1 = weighted_avg_f1 / len(expected)
-    #
-    # # Bar graph + Measurements tables
-    # print("Plotting measurements...", end=" ")
-    # fig = plt.figure()
-    #
-    # # Layout
-    # gs = GridSpec(2, 4, figure=fig)
-    # ax1 = fig.add_subplot(gs[0, :])
-    # ax2 = fig.add_subplot(gs[1, :-2])
-    #
-    # bottom_right_grid = gs[1, -2:].subgridspec(5, 1)
-    #
-    # ax3 = fig.add_subplot(bottom_right_grid[0, :])
-    # ax4 = fig.add_subplot(bottom_right_grid[1:, :])
-    #
-    # fig.set_figwidth(20)
-    # fig.set_figheight(15)
-    #
-    # plot_histogram(classes, expected, ax1,
-    #                color=(74 / 255, 159 / 255, 168 / 255), label='Target count', y_tick_count=-1, width=0.9)
-    # plot_histogram(classes, predictions, ax1,
-    #                color=(230 / 255, 208 / 255, 46 / 255), label='Predicted', y_tick_count=-1, width=0.4)
-    #
-    # ax1.grid(axis="y", linestyle='dotted')
-    # ax1.legend()
-    # ax1.set_title(f'{model_name} - Measurement results')
-    # ax1.set_ylabel("Instance count")
-    #
-    # ax2.set_axis_off()
-    # ax3.set_axis_off()
-    #
-    # ax2.table(cellText=table_cells,
-    #           rowLabels=classes,
-    #           colLabels=["Precision", "Recall", "f1"], loc='center')
-    #
-    # ax3.table(cellText=[[
-    #     f"{round(accuracy * 100, 3)} %",
-    #     f"{round(macro_avg_f1 * 100, 3)} %",
-    #     f"{round(weighted_avg_f1 * 100, 3)} %"]],
-    #     colLabels=["Accuracy", "Macro-Average f1", "Weighted-Average f1"], loc='center')
-    #
-    # plot_confusion_matrix(model, features, expected,
-    #                       display_labels=classes,
-    #                       cmap=plt.cm.Blues, ax=ax4)
-    #
-    # fig.show()
-    # fig.savefig(out_dir + model_name + '-' + dataset_name + '-measurements.png')
-    # print("Done.")
-
 
 def make_trace(data, filename):
     lines = list(
@@ -219,25 +127,6 @@ def main(argv):
     # Generate 2 Vocabulary (Used as features)
     voc = extract_features_of_set(orig_train_data)  # All words
     filtered_voc = dict(filter(lambda el: el[1] > 1, voc.items()))  # More than 1 instance
-
-    # print("Plotting instances count...", end=" ")
-    # figure, axe = plt.subplots(1)
-    #
-    # figure.suptitle(f'Instances count - NB_BOW')
-    # figure.set_figheight(10)
-    # figure.set_figwidth(14)
-    #
-    # # Display distribution
-    # plot_histogram(voc.keys(), get_voc_of_set(train_data), axe)
-
-    # Add titles / labels
-    # axe.set_title("NB-BOW")
-    # axe.set_ylabel('Count')
-    #
-    # figure.show()
-    # figure.savefig(out_dir + 'instances_count_' + dt_name + '.png')
-    # print("Done.")
-    # print()
 
     # Extract features + data formatting
     train_data = [{
