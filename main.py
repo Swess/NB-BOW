@@ -4,6 +4,7 @@ import os
 from classifiers import MultinomialNB_BOW
 from data_loader import TSVLoader
 import numpy as np
+from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
 
 def load_tsv(filename, fields=None):
@@ -50,7 +51,7 @@ def extract_features_of_set(data):
         for word in l["text"].split(" "):
             w = word.lower()
             if w in word_counts:
-                word_counts[w] += word_counts[w]
+                word_counts[w] += 1
             else:
                 word_counts[w] = 1
     return word_counts
@@ -62,7 +63,6 @@ def train_and_test_model(model_name, vocabulary, training_data, test_data):
     train_class = [el["cat"] for el in training_data]
 
     features = [el["features"] for el in test_data]
-    expected = [el["cat"] for el in test_data]
 
     print()
     print(f"Processing for model '{model_name}'.")
@@ -85,11 +85,12 @@ def make_trace(data, filename):
 
 
 def make_eval(data, filename):
-    TP = sum([1 if el[1] == el[3] else 0 for el in data])
-    acc = TP / len(data)
+    correct = sum([1 if el[1] == el[3] else 0 for el in data])
+    acc = correct / len(data)
 
     def _calc(data, t_class):
         other_class = "yes" if t_class == "no" else "no"
+        TP = sum([1 if el[1] == t_class and el[3] == t_class else 0 for el in data])
         FP = sum([1 if el[1] == t_class and el[3] == other_class else 0 for el in data])
         FN = sum([1 if el[1] == other_class and el[3] == t_class else 0 for el in data])
 
