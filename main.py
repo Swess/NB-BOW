@@ -4,7 +4,6 @@ import os
 from classifiers import MultinomialNB_BOW
 from data_loader import TSVLoader
 import numpy as np
-from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_score
 
 
 def load_tsv(filename, fields=None):
@@ -94,9 +93,9 @@ def make_eval(data, filename):
         FP = sum([1 if el[1] == t_class and el[3] == other_class else 0 for el in data])
         FN = sum([1 if el[1] == other_class and el[3] == t_class else 0 for el in data])
 
-        P = TP / (TP + FP)
-        R = TP / (TP + FN)
-        F1 = (P * R) / (P + R)
+        P = TP / (TP + FP) if (TP + FP) > 0 else 0
+        R = TP / (TP + FN) if (TP + FN) > 0 else 0
+        F1 = (P * R) / (P + R) if (P + R) > 0 else 0
 
         return P, R, F1
 
@@ -108,6 +107,7 @@ def make_eval(data, filename):
         file.write(f"{yes_P}  {no_P}\n")
         file.write(f"{yes_R}  {no_R}\n")
         file.write(f"{yes_F1}  {no_F1}\n")
+
 
 
 def main(argv):
@@ -169,9 +169,6 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    print("<<<<<<<<<<<<>>>>>>>>>>>>")
-    print("COMP 472 - Assignment 3")
-    print("Isaac Doré - 40043159")
     print("<<<<<<<<<<<<>>>>>>>>>>>>")
     print()
 

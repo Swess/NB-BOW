@@ -1,7 +1,4 @@
-[Github Repo](https://github.com/Swess/COMP472_A3)
-
-# COMP 472 - Assignment 3
-**Author:** Isaac Doré - 40043159
+Implementation of a Bag-Of-Word Naive Bayes Classifier for multidimensional features vector analysis.
 
 # Dependencies
 To run the code, the requirements first needs to be installed.
@@ -15,7 +12,7 @@ pip install -r requirements.txt
 ```
 usage: main.py [-h] [-tr <training_set>] [-te <test_set>] [-o <output>]
 
-Bag-Of-Word Naive Bayes Classifier. Made for COMP 472 Assignment 3.
+Bag-Of-Word Naive Bayes Classifier.
 
 optional arguments:
   -h, --help            show this help message and exit
